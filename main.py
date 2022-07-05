@@ -60,7 +60,7 @@ class MouseCounter:
                 self.counts[event.code] = 0
             self.counts[event.code] += 1
 
-            print(f"Counts: {self.counts}")
+            # print(f"Counts: {self.counts}")
 
     def check_save(self):
         now = datetime.now()

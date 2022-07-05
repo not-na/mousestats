@@ -68,4 +68,9 @@ Take a look at the produced data files to see the exact format.
 
 ## Analytics
 
-TODO: write an analytics script
+Run the script `analyze.py` to show some statistics:
+    
+    $ python analyze.py
+
+Currently, monthly, yearly and overall sums are shown per-button.
+Also, a rough estimate of expected mouse life is given.
