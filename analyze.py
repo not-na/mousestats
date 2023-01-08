@@ -29,7 +29,7 @@ import glob
 import json
 
 
-BUTTON_ORDER = ["BTN_LEFT", "BTN_RIGHT", "BTN_MIDDLE", "REL_LEFT", "REL_RIGHT"]
+BUTTON_ORDER = ["BTN_LEFT", "BTN_RIGHT", "BTN_MIDDLE", "REL_LEFT", "REL_RIGHT", "_hour"]
 
 BUTTON_NAMES = {
     "BTN_LEFT": "Left",
@@ -38,6 +38,7 @@ BUTTON_NAMES = {
     "REL_WHEEL": "Wheel",
     "REL_LEFT": "Extra-Left",
     "REL_RIGHT": "Extra-Right",
+    "_hour": "Active hours",
 }
 
 LIFETIME = 20000000
@@ -52,13 +53,15 @@ def read_file(fname: str) -> Dict[int, Dict[str, Any]]:
     out = {}
     for line in lines:
         t = datetime.datetime.strptime(line["time"], "%d.%m.%Y %H:%M:%S")
+        line["_t"] = t
+        line["_hour"] = 1  # For monthly hour count
         out[t.day * 24 - 24 + t.hour] = line
 
     return out
 
 
 def find_files(datapath: str) -> List[str]:
-    return glob.glob(os.path.join(os.path.expanduser(datapath), "data_*.jsonl"))
+    return sorted(glob.glob(os.path.join(os.path.expanduser(datapath), "data_*.jsonl")))
 
 
 def find_months(datapath: str) -> List[Tuple[int, int]]:
@@ -87,7 +90,7 @@ def sum_lines(lines) -> Dict[str, int]:
     out = {}
     for line in lines:
         for k, v in line.items():
-            if k != "time":
+            if k not in ["time", "_t"]:
                 if k not in out:
                     out[k] = 0
                 out[k] += v
@@ -111,10 +114,21 @@ def format_line(line, num_digits=7) -> str:
     return "\t".join(out)
 
 
+def flatten_data(monthdata):
+    out = []
+    for m, v in monthdata.items():
+        out.extend(v.values())
+
+    return out
+
+
 def print_summary(datapath):
     months_list = find_months(datapath)
 
-    months = {m: sum_lines(get_month(datapath, *m).values()) for m in months_list}
+    monthdata = {m: get_month(datapath, *m) for m in months_list}
+    months = {m: sum_lines(v.values()) for m, v in monthdata.items()}
+
+    flat_lines = flatten_data(monthdata)
 
     years = {}
     for m, v in months.items():
@@ -147,7 +161,19 @@ def print_summary(datapath):
     tot_hours = LIFETIME / cph
     print(
         f"Assuming a life expectancy of {LIFETIME} clicks, the left button should last"
-        f" about {tot_hours:.2f}h (~{tot_hours/24/365:.2f}y)"
+        f" about {tot_hours:.2f}h (~{tot_hours/24/365:.2f}y) of normal usage"
+    )
+
+    # Second estimate including AFK time, based on delta between first record and now
+    first_h = min(flat_lines, key=(lambda line: line["_t"]))["_t"]
+    life_hours = (datetime.datetime.now() - first_h) / datetime.timedelta(hours=1)
+    life_cph = total_left_clicks / life_hours
+    life_expectancy = LIFETIME / life_cph
+    print(
+        f"First record is at {first_h}, total lifetime is about {life_hours:.2f}h (~{life_hours/24/365:.2f}y, ~{total_hours/life_hours*100:.2f}% active)"
+    )
+    print(
+        f"Using the total lifetime, expected total lifetime is about {life_expectancy:.2f}h (~{life_expectancy/24/365:.2f}y, {life_cph:.2f} CPH)"
     )
 
     # TODO: add more advanced stats, e.g. yearly trends
