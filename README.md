@@ -29,8 +29,8 @@ Clone this repo to a folder of your choice and enter it:
 
 Next, create a virtualenv to install the requirements into:
     
-    $ python3 -mvenv mousestats-py
-    $ source mousestats-py/bin/activate
+    $ python3 -mvenv venv
+    $ source venv/bin/activate
     $ pip install -r requirements.txt
 
 ## Starting `mousestats` manually

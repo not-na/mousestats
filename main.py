@@ -110,6 +110,8 @@ class MouseCounter:
             time.sleep(0.1)
 
         try:
+            print("mousestats started")
+
             while self.running:
                 event = events.next_event()
                 while event:
@@ -121,6 +123,7 @@ class MouseCounter:
         except KeyboardInterrupt:
             self.save()
         finally:
+            print("mousestats stopping")
             events.stop_listening()
 
 

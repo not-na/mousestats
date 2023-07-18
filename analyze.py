@@ -27,9 +27,18 @@ import os
 import datetime
 import glob
 import json
+from pathlib import Path
 
 
-BUTTON_ORDER = ["BTN_LEFT", "BTN_RIGHT", "BTN_MIDDLE", "REL_LEFT", "REL_RIGHT", "_hour"]
+BUTTON_ORDER = [
+    "BTN_LEFT",
+    "BTN_RIGHT",
+    "BTN_MIDDLE",
+    "REL_LEFT",
+    "REL_RIGHT",
+    "_hour",
+    "_cph",
+]
 
 BUTTON_NAMES = {
     "BTN_LEFT": "Left",
@@ -39,6 +48,7 @@ BUTTON_NAMES = {
     "REL_LEFT": "Extra-Left",
     "REL_RIGHT": "Extra-Right",
     "_hour": "Active hours",
+    "_cph": "CPH",
 }
 
 LIFETIME = 20000000
@@ -90,10 +100,15 @@ def sum_lines(lines) -> Dict[str, int]:
     out = {}
     for line in lines:
         for k, v in line.items():
-            if k not in ["time", "_t"]:
+            if k not in ["time", "_t", "_cph"]:
                 if k not in out:
                     out[k] = 0
                 out[k] += v
+
+    if out.get("_hour", 0) != 0:
+        out["_cph"] = out.get("BTN_LEFT", 0) / out["_hour"]
+    else:
+        out["_cph"] = float("NaN")
 
     return out
 
@@ -109,7 +124,7 @@ def format_line(line, num_digits=7) -> str:
 
     for k, v in l2.items():
         name = BUTTON_NAMES[k] if k in BUTTON_NAMES else "Other"
-        out.append(f"{name}: {v:{num_digits}}")
+        out.append(f"{name}: {v:{num_digits}.0f}")
 
     return "\t".join(out)
 
@@ -156,7 +171,7 @@ def print_summary(datapath):
     total_hours = sum(len(read_file(fname)) for fname in find_files(datapath))
     cph = total_left_clicks / total_hours
     print(
-        f"{total_left_clicks} Left Clicks over roughly {total_hours}h => {cph:.2f} clicks/hour"
+        f"{total_left_clicks} Left Clicks over roughly {total_hours}h => {cph:.2f} clicks/hour (one click every ~{1/(cph/60/60):.3f}s)"
     )
     tot_hours = LIFETIME / cph
     print(
@@ -166,14 +181,16 @@ def print_summary(datapath):
 
     # Second estimate including AFK time, based on delta between first record and now
     first_h = min(flat_lines, key=(lambda line: line["_t"]))["_t"]
+    last_h = max(flat_lines, key=(lambda line: line["_t"]))["_t"]
     life_hours = (datetime.datetime.now() - first_h) / datetime.timedelta(hours=1)
     life_cph = total_left_clicks / life_hours
     life_expectancy = LIFETIME / life_cph
+    print(f"Most recent record is at {last_h} (start of last full hour)")
     print(
         f"First record is at {first_h}, total lifetime is about {life_hours:.2f}h (~{life_hours/24/365:.2f}y, ~{total_hours/life_hours*100:.2f}% active)"
     )
     print(
-        f"Using the total lifetime, expected total lifetime is about {life_expectancy:.2f}h (~{life_expectancy/24/365:.2f}y, {life_cph:.2f} CPH)"
+        f"Using the total lifetime, expected total lifetime is about {life_expectancy:.2f}h (~{life_expectancy/24/365:.2f}y, {life_cph:.2f} CPH, one click every ~{1/(life_cph/60/60):.3f}s)"
     )
 
     # TODO: add more advanced stats, e.g. yearly trends
@@ -192,8 +209,12 @@ def main():
 
     datapath = options.datapath
 
-    nfiles = len(find_files(datapath))
-    print(f"Datapath is {datapath}, containing {nfiles} data files")
+    files = find_files(datapath)
+    nfiles = len(files)
+    totsize = sum(map(lambda f: Path(f).stat().st_size, files))
+    print(
+        f"Datapath is {datapath}, containing {nfiles} data files with a total size of {totsize//1024}kiB"
+    )
     if nfiles == 0:
         print("ERROR: Found no data files! No statistics will be calculated.")
         print("Use the --datapath argument to specify the base data directory")
